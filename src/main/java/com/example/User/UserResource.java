@@ -240,6 +240,24 @@ public class UserResource {
         }
     }
 
+    @POST
+    @Path("/{userId}/abandon-bids")
+    @RolesAllowed({"User", "Admin"}) // Only users and admins can abandon bids
+    @Consumes(MediaType.APPLICATION_JSON)
+    public Response abandonBids(@PathParam("userId") Long userId, List<Long> bidIdsToAbandon) {
+        try {
+            String result = userService.abandonBids(userId, bidIdsToAbandon);
+            return Response.ok(result).build();
+        } catch (IllegalArgumentException e) {
+            return Response.status(Response.Status.BAD_REQUEST).entity(e.getMessage()).build();
+        } catch (Exception e) {
+            return Response.status(Response.Status.INTERNAL_SERVER_ERROR)
+                    .entity("An unexpected error occurred: " + e.getMessage())
+                    .build();
+        }
+    }
+
+
 //post bech tzid l pokemon
 //w post bech tzid Enchere fel liste des encheres ta3 l user
 }

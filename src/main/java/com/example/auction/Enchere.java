@@ -40,6 +40,9 @@ public class Enchere  {
     public Long getUserId() {
         return userId;
     }
+    public Long getId() {
+        return id;
+    }
 
     public void setUserId(Long userId) {
         this.userId = userId;

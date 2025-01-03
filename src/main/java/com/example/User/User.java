@@ -3,6 +3,7 @@ package com.example.User;
 
 
 import com.example.Pokemon.Pokemon;
+import com.example.auction.Bid;
 import com.example.auction.Enchere;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.Email;
@@ -40,13 +41,23 @@ public class User {
     @Column(nullable = false)
     private String role = "User";
 
-    @Transient
+    @OneToMany(mappedBy = "user", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<Pokemon> pokemons = new ArrayList<>();
 
-    @Transient
+    @OneToMany(mappedBy = "user", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<Enchere> encheres = new ArrayList<>();
 
+    @OneToMany(mappedBy = "user", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<Bid> activeBids = new ArrayList<>();
+
     // Getter and Setter for role
+    public List<Bid> getActiveBids() {
+        return activeBids;
+    }
+
+    public void setActiveBids(List<Bid> activeBids) {
+        this.activeBids = activeBids;
+    }
 
     public List<Pokemon> getPokemons() {
         return pokemons;

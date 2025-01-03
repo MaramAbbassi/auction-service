@@ -5,7 +5,9 @@ package com.example.User;
 import com.example.Pokemon.Pokemon;
 import com.example.User.Exception.UserNotFoundException;
 
+import com.example.auction.Bid;
 import com.example.auction.Enchere;
+import com.example.auction.EnchereManager;
 import com.example.auction.EnchereResource;
 import com.example.utils.JwtUtils;
 import jakarta.enterprise.context.ApplicationScoped;
@@ -13,6 +15,9 @@ import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.NoResultException;
 import jakarta.transaction.Transactional;
+
+import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -35,6 +40,9 @@ public class UserService {
 
     @Inject
     EnchereResource enchereClient;
+
+    @Inject
+    EnchereManager enchereManager;
 
 
     public List<User> getAllUsers() {
@@ -231,13 +239,7 @@ public class UserService {
         return findUserById(userId).getPokemons();
     }
 
-    @Transactional
-    public void placeBid(Long userId, Long enchereId,double amount) {
-        User user = findUserById(userId);
-        Enchere enchere=enchereClient.getEncherebyId(enchereId);
-        enchereClient.placerBid(userId, enchereId,amount); // Notify the Enchère microservice
-        user.getEncheres().add(enchere);
-    }
+
 
     public List<Enchere> getUserEncheres(Long userId) {
         return findUserById(userId).getEncheres();
@@ -277,6 +279,108 @@ public class UserService {
                 .setMaxResults(5) // Limit the results to 5
                 .getResultList();
     }
+
+    @Transactional
+    public String placeBid(Long userId, Long enchereId, double amount) {
+        User user = findUserById(userId);
+        Enchere enchere = enchereManager.findEnchere(enchereId);
+
+        if (enchere == null || !"active".equals(enchere.getStatus())) {
+            return "Auction not found or is not active.";
+        }
+        if (amount <= enchere.getHighestBid()) {
+            return "Bid amount is too low.";
+        }
+
+        // Check if the user has enough LimCoins to place the bid
+        if (amount > user.getLimCoins()) {
+            return "You do not have enough LimCoins to place this bid.";
+        }
+
+        // Create a new bid and add it to the auction and user's active bids
+        Bid bid = new Bid();
+        bid.setUserId(userId);
+        bid.setEnchere(enchere);
+        bid.setAmount(amount);
+        bid.setTimestamp(LocalDateTime.now());
+
+        enchere.getBids().add(bid);
+        user.getActiveBids().add(bid);
+
+        // Update the auction's highest bid
+        enchere.setHighestBid(amount);
+        enchere.setHighestBidderId(userId);
+
+        // Persist changes
+        em.merge(user);
+        em.merge(enchere);
+
+        return "Bid placed successfully.";
+    }
+
+
+    public double calculateTotalWonBids(Long userId) {
+        User user = findUserById(userId);
+
+        return user.getActiveBids().stream()
+                .filter(bid -> bid.getEnchere().getStatus().equals("closed") &&
+                        bid.getEnchere().getHighestBidderId().equals(userId))
+                .mapToDouble(Bid::getAmount)
+                .sum();
+    }
+
+    @Transactional
+    public String abandonBids(Long userId, List<Long> bidIdsToAbandon) {
+        User user = findUserById(userId);
+
+        for (Long bidId : bidIdsToAbandon) {
+            // Find the bid in the user's active bids
+            Bid bid = user.getActiveBids().stream()
+                    .filter(b -> b.getBIDid().equals(bidId))
+                    .findFirst()
+                    .orElse(null);
+
+            if (bid != null) {
+                Enchere enchere = bid.getEnchere();
+
+                // Remove the bid from the auction
+                enchere.getBids().remove(bid);
+//lenna zid choufffffffffff
+                // If this bid was the highest, reset the auction's highest bid
+                if (enchere.getHighestBidderId().equals(userId)) {
+                    enchere.setHighestBid(0);
+                    enchere.setHighestBidderId(null);
+
+                    // Optional: Update to the next highest bid
+                    enchere.getBids().stream()
+                            .max((b1, b2) -> Double.compare(b1.getAmount(), b2.getAmount()))
+                            .ifPresent(nextHighestBid -> {
+                                enchere.setHighestBid(nextHighestBid.getAmount());
+                                enchere.setHighestBidderId(nextHighestBid.getUserId());
+                            });
+                }
+
+                // Remove the bid from the user's active bids
+                user.getActiveBids().remove(bid);
+
+                // Persist changes
+                em.merge(enchere);
+            }
+        }
+
+        em.merge(user);
+        return "Selected bids have been abandoned.";
+    }
+
+
+
+
+
+
+
+
+
+
 
 
 
